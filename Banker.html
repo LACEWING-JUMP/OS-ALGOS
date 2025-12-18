@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Banker's Algorithm Solver</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Compact inputs for matrices */
+        .matrix-input {
+            transition: all 0.2s;
+        }
+        .matrix-input:focus {
+            transform: scale(1.05);
+            z-index: 10;
+        }
+        ::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .fade-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-emerald-100">
+
+    <div class="max-w-7xl mx-auto p-4 md:p-8">
+        
+        <!-- Header -->
+        <div class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-bold text-slate-900 tracking-tight">Banker's Algorithm Solver</h1>
+                <p class="text-slate-500 mt-1">Deadlock avoidance & safety sequence calculator</p>
+            </div>
+            
+            <div id="status-badge" class="px-4 py-2 rounded-lg font-bold text-sm shadow-sm transition-colors duration-300 bg-gray-200 text-gray-500 flex items-center gap-2">
+                <i data-lucide="loader" class="animate-spin w-4 h-4"></i> Calculating...
+            </div>
+        </div>
+
+        <!-- Configuration Bar -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6 flex flex-wrap gap-6 items-center">
+            
+            <div class="flex items-center gap-4">
+                <div class="flex flex-col">
+                    <label class="text-xs font-semibold text-slate-500 uppercase">Processes (P)</label>
+                    <div class="flex items-center gap-1 mt-1">
+                        <button onclick="updateDimensions(-1, 0)" class="p-1 hover:bg-slate-100 rounded text-slate-600"><i data-lucide="minus" class="w-4 h-4"></i></button>
+                        <span id="display-rows" class="w-8 text-center font-bold font-mono">5</span>
+                        <button onclick="updateDimensions(1, 0)" class="p-1 hover:bg-slate-100 rounded text-slate-600"><i data-lucide="plus" class="w-4 h-4"></i></button>
+                    </div>
+                </div>
+
+                <div class="w-px h-8 bg-slate-200 mx-2"></div>
+
+                <div class="flex flex-col">
+                    <label class="text-xs font-semibold text-slate-500 uppercase">Resources (R)</label>
+                    <div class="flex items-center gap-1 mt-1">
+                        <button onclick="updateDimensions(0, -1)" class="p-1 hover:bg-slate-100 rounded text-slate-600"><i data-lucide="minus" class="w-4 h-4"></i></button>
+                        <span id="display-cols" class="w-8 text-center font-bold font-mono">3</span>
+                        <button onclick="updateDimensions(0, 1)" class="p-1 hover:bg-slate-100 rounded text-slate-600"><i data-lucide="plus" class="w-4 h-4"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="w-px h-8 bg-slate-200 hidden md:block"></div>
+
+            <div class="flex-1">
+                <label class="text-xs font-semibold text-slate-500 uppercase mb-1 block">Available Resources (Initial)</label>
+                <div id="available-inputs" class="flex gap-2">
+                    <!-- Injected by JS -->
+                </div>
+            </div>
+
+            <button onclick="resetToDefault()" class="text-xs text-emerald-600 font-medium hover:text-emerald-700 underline">
+                Reset to Example
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            
+            <!-- Allocation Matrix -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                <div class="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+                    <h2 class="font-semibold text-slate-800 flex items-center gap-2">
+                        <i data-lucide="grid" class="w-4 h-4 text-emerald-500"></i> Allocation Matrix
+                    </h2>
+                    <span class="text-xs text-slate-400">Current holdings</span>
+                </div>
+                <div class="p-4 overflow-x-auto flex-1">
+                    <div id="allocation-grid" class="inline-block min-w-full"></div>
+                </div>
+            </div>
+
+            <!-- Max Matrix -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                <div class="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+                    <h2 class="font-semibold text-slate-800 flex items-center gap-2">
+                        <i data-lucide="maximize" class="w-4 h-4 text-emerald-500"></i> Max Matrix
+                    </h2>
+                    <span class="text-xs text-slate-400">Maximum demand</span>
+                </div>
+                <div class="p-4 overflow-x-auto flex-1">
+                    <div id="max-grid" class="inline-block min-w-full"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Need & Results Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Need Matrix (Calculated) -->
+            <div class="lg:col-span-4 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+                    <h2 class="font-semibold text-slate-800 flex items-center gap-2">
+                        <i data-lucide="calculator" class="w-4 h-4 text-emerald-500"></i> Need Matrix
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-0.5">Calculated (Max - Allocation)</p>
+                </div>
+                <div class="p-4 overflow-x-auto">
+                    <div id="need-grid" class="text-sm font-mono"></div>
+                </div>
+            </div>
+
+            <!-- Simulation Log -->
+            <div class="lg:col-span-8 bg-slate-900 text-slate-200 rounded-xl shadow-lg overflow-hidden flex flex-col">
+                <div class="px-4 py-3 border-b border-slate-800 bg-slate-950 flex justify-between items-center">
+                    <h2 class="font-semibold text-emerald-400 flex items-center gap-2">
+                        <i data-lucide="terminal" class="w-4 h-4"></i> Safety Sequence Log
+                    </h2>
+                    <div id="result-text" class="text-sm font-bold"></div>
+                </div>
+                <div id="simulation-log" class="p-4 font-mono text-sm overflow-y-auto max-h-[300px] space-y-2">
+                    <!-- Logs injected here -->
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <script>
+        // --- State ---
+        const state = {
+            rows: 5,
+            cols: 3,
+            allocation: [
+                [0, 1, 0],
+                [2, 0, 0],
+                [3, 0, 2],
+                [2, 1, 1],
+                [0, 0, 2]
+            ],
+            max: [
+                [7, 5, 3],
+                [3, 2, 2],
+                [9, 0, 2],
+                [2, 2, 2],
+                [4, 3, 3]
+            ],
+            available: [3, 3, 2],
+            need: [],
+            isSafe: false,
+            safeSequence: []
+        };
+
+        // --- Core Logic ---
+
+        function calculateNeed() {
+            state.need = [];
+            for(let i=0; i<state.rows; i++) {
+                let row = [];
+                for(let j=0; j<state.cols; j++) {
+                    let val = (state.max[i][j] || 0) - (state.allocation[i][j] || 0);
+                    row.push(val < 0 ? 0 : val); // Prevent negative need
+                }
+                state.need.push(row);
+            }
+        }
+
+        function runBankers() {
+            calculateNeed();
+
+            // Safety Algorithm
+            let work = [...state.available];
+            let finish = new Array(state.rows).fill(false);
+            let sequence = [];
+            let logs = [];
+            
+            logs.push({ type: 'init', msg: `Initial Available: [${work.join(', ')}]` });
+
+            let count = 0;
+            while (count < state.rows) {
+                let found = false;
+                for (let i = 0; i < state.rows; i++) {
+                    if (!finish[i]) {
+                        // Check if Need[i] <= Work
+                        let canAllocate = true;
+                        for (let j = 0; j < state.cols; j++) {
+                            if (state.need[i][j] > work[j]) {
+                                canAllocate = false;
+                                break;
+                            }
+                        }
+
+                        if (canAllocate) {
+                            // Allocation possible
+                            let oldWork = [...work];
+                            for (let j = 0; j < state.cols; j++) {
+                                work[j] += state.allocation[i][j];
+                            }
+                            finish[i] = true;
+                            sequence.push(i);
+                            count++;
+                            found = true;
+                            
+                            logs.push({
+                                type: 'success',
+                                process: `P${i}`,
+                                need: `[${state.need[i].join(',')}]`,
+                                workBefore: `[${oldWork.join(',')}]`,
+                                workAfter: `[${work.join(',')}]`,
+                                msg: `P${i} Need [${state.need[i]}] ≤ Work [${oldWork}]. Executing... New Available: [${work}]`
+                            });
+                        }
+                    }
+                }
+                if (!found) break;
+            }
+
+            state.isSafe = (count === state.rows);
+            state.safeSequence = sequence;
+            return logs;
+        }
+
+        // --- Rendering ---
+
+        function createInputGrid(id, data, callback) {
+            const container = document.getElementById(id);
+            container.innerHTML = '';
+            
+            // Header Row (Resources)
+            let headerHtml = '<div class="flex mb-2 gap-2"><div class="w-12"></div>';
+            for(let j=0; j<state.cols; j++) {
+                headerHtml += `<div class="flex-1 text-center text-xs font-bold text-slate-400">R${j}</div>`;
+            }
+            headerHtml += '</div>';
+            container.innerHTML += headerHtml;
+
+            // Rows
+            for(let i=0; i<state.rows; i++) {
+                let rowHtml = document.createElement('div');
+                rowHtml.className = 'flex mb-2 gap-2 items-center';
+                
+                // Process Label
+                let label = document.createElement('div');
+                label.className = 'w-12 text-sm font-bold text-slate-500';
+                label.textContent = `P${i}`;
+                rowHtml.appendChild(label);
+
+                for(let j=0; j<state.cols; j++) {
+                    let input = document.createElement('input');
+                    input.type = 'number';
+                    input.value = data[i][j] !== undefined ? data[i][j] : 0;
+                    input.className = 'matrix-input flex-1 w-full min-w-[3rem] p-2 text-center text-sm border border-slate-200 rounded-md focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none font-mono';
+                    input.min = 0;
+                    
+                    // Event Listener
+                    input.addEventListener('input', (e) => {
+                        let val = parseInt(e.target.value) || 0;
+                        data[i][j] = val;
+                        callback();
+                    });
+
+                    rowHtml.appendChild(input);
+                }
+                container.appendChild(rowHtml);
+            }
+        }
+
+        function renderAvailableInputs() {
+            const container = document.getElementById('available-inputs');
+            container.innerHTML = '';
+            
+            for(let j=0; j<state.cols; j++) {
+                let wrapper = document.createElement('div');
+                wrapper.className = 'relative group';
+                
+                let label = document.createElement('span');
+                label.className = 'absolute -top-2 left-2 px-1 bg-white text-[10px] text-slate-400 font-bold';
+                label.textContent = `R${j}`;
+
+                let input = document.createElement('input');
+                input.type = 'number';
+                input.value = state.available[j] !== undefined ? state.available[j] : 0;
+                input.className = 'w-16 p-2 text-center text-sm border-2 border-slate-200 rounded-lg focus:border-emerald-500 outline-none font-bold font-mono text-slate-700';
+                
+                input.addEventListener('input', (e) => {
+                    let val = parseInt(e.target.value) || 0;
+                    state.available[j] = val;
+                    update();
+                });
+
+                wrapper.appendChild(input);
+                wrapper.appendChild(label);
+                container.appendChild(wrapper);
+            }
+        }
+
+        function renderNeedGrid() {
+            const container = document.getElementById('need-grid');
+            
+            // Build Table
+            let html = '<table class="w-full text-center border-collapse">';
+            
+            // Header
+            html += '<thead><tr><th class="p-1 text-xs text-slate-400"></th>';
+            for(let j=0; j<state.cols; j++) html += `<th class="p-1 text-xs text-slate-400">R${j}</th>`;
+            html += '</tr></thead><tbody>';
+
+            // Body
+            state.need.forEach((row, i) => {
+                html += `<tr class="border-b border-slate-50 hover:bg-slate-50">`;
+                html += `<td class="p-1 text-xs font-bold text-slate-400">P${i}</td>`;
+                row.forEach(val => {
+                    let colorClass = val > 0 ? 'text-slate-700' : 'text-slate-300';
+                    html += `<td class="p-1 ${colorClass}">${val}</td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function renderLogs(logs) {
+            const container = document.getElementById('simulation-log');
+            const statusBadge = document.getElementById('status-badge');
+            const resultText = document.getElementById('result-text');
+
+            container.innerHTML = '';
+
+            logs.forEach((log, index) => {
+                let div = document.createElement('div');
+                div.className = 'flex gap-3 fade-in';
+                div.style.animationDelay = `${index * 50}ms`;
+
+                if (log.type === 'init') {
+                    div.innerHTML = `<span class="text-slate-500">></span> <span class="text-slate-400">${log.msg}</span>`;
+                } else {
+                    div.innerHTML = `
+                        <span class="text-emerald-500 font-bold min-w-[20px]">></span>
+                        <div>
+                            <span class="text-emerald-300 font-bold">${log.process}</span> 
+                            <span class="text-slate-400">Need ${log.need} ≤ Work ${log.workBefore}.</span>
+                            <span class="text-slate-300 block text-xs mt-1">Allocated. New Work: <span class="text-emerald-400">${log.workAfter}</span></span>
+                        </div>
+                    `;
+                }
+                container.appendChild(div);
+            });
+
+            if (state.isSafe) {
+                // Success Status
+                statusBadge.className = 'px-4 py-2 rounded-lg font-bold text-sm shadow-sm transition-colors duration-300 bg-emerald-100 text-emerald-700 flex items-center gap-2';
+                statusBadge.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4"></i> Safe`;
+                
+                resultText.innerHTML = `Sequence: <span class="text-white bg-emerald-600 px-2 py-0.5 rounded ml-2"> ${state.safeSequence.map(i => 'P'+i).join(' → ')} </span>`;
+                
+                // Add final log
+                let finalDiv = document.createElement('div');
+                finalDiv.className = 'mt-4 pt-2 border-t border-slate-800 text-emerald-400 font-bold fade-in';
+                finalDiv.textContent = `SYSTEM IS SAFE. Sequence: < ${state.safeSequence.map(i => 'P'+i).join(', ')} >`;
+                container.appendChild(finalDiv);
+
+            } else {
+                // Fail Status
+                statusBadge.className = 'px-4 py-2 rounded-lg font-bold text-sm shadow-sm transition-colors duration-300 bg-red-100 text-red-700 flex items-center gap-2';
+                statusBadge.innerHTML = `<i data-lucide="alert-triangle" class="w-4 h-4"></i> Unsafe`;
+                
+                resultText.innerHTML = `<span class="text-red-400">Deadlock Possible</span>`;
+
+                let finalDiv = document.createElement('div');
+                finalDiv.className = 'mt-4 pt-2 border-t border-slate-800 text-red-400 font-bold fade-in';
+                finalDiv.textContent = `SYSTEM IS UNSAFE. Unable to find safe sequence.`;
+                container.appendChild(finalDiv);
+            }
+        }
+
+        function update() {
+            const logs = runBankers();
+            renderNeedGrid();
+            renderLogs(logs);
+            lucide.createIcons();
+        }
+
+        // --- Interaction ---
+
+        function updateDimensions(dRow, dCol) {
+            let newRows = state.rows + dRow;
+            let newCols = state.cols + dCol;
+            
+            if(newRows < 1) newRows = 1;
+            if(newRows > 10) newRows = 10; // Limit for UI sanity
+            if(newCols < 1) newCols = 1;
+            if(newCols > 8) newCols = 8;
+
+            // Resize arrays
+            if (newRows !== state.rows) {
+                while(state.allocation.length < newRows) state.allocation.push(new Array(state.cols).fill(0));
+                while(state.max.length < newRows) state.max.push(new Array(state.cols).fill(0));
+                if(state.allocation.length > newRows) {
+                    state.allocation = state.allocation.slice(0, newRows);
+                    state.max = state.max.slice(0, newRows);
+                }
+            }
+
+            if (newCols !== state.cols) {
+                state.allocation.forEach(row => {
+                    while(row.length < newCols) row.push(0);
+                    if(row.length > newCols) row.length = newCols; // Array truncation trick
+                });
+                state.max.forEach(row => {
+                    while(row.length < newCols) row.push(0);
+                    if(row.length > newCols) row.length = newCols;
+                });
+                while(state.available.length < newCols) state.available.push(0);
+                if(state.available.length > newCols) state.available.length = newCols;
+            }
+
+            state.rows = newRows;
+            state.cols = newCols;
+
+            document.getElementById('display-rows').textContent = state.rows;
+            document.getElementById('display-cols').textContent = state.cols;
+
+            // Full Re-render
+            initGrids();
+            update();
+        }
+
+        function initGrids() {
+            createInputGrid('allocation-grid', state.allocation, update);
+            createInputGrid('max-grid', state.max, update);
+            renderAvailableInputs();
+        }
+
+        function resetToDefault() {
+            state.rows = 5;
+            state.cols = 3;
+            state.allocation = [[0, 1, 0], [2, 0, 0], [3, 0, 2], [2, 1, 1], [0, 0, 2]];
+            state.max = [[7, 5, 3], [3, 2, 2], [9, 0, 2], [2, 2, 2], [4, 3, 3]];
+            state.available = [3, 3, 2];
+            
+            document.getElementById('display-rows').textContent = state.rows;
+            document.getElementById('display-cols').textContent = state.cols;
+            
+            initGrids();
+            update();
+        }
+
+        // --- Initialization ---
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initGrids();
+            update();
+        });
+
+    </script>
+</body>
+</html>

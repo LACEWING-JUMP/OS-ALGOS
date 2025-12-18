@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disk Scheduling Solver</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Custom scrollbar for better aesthetics */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8; 
+        }
+        .transition-graph {
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-50 text-gray-800 font-sans selection:bg-blue-100">
+
+    <div class="max-w-6xl mx-auto p-4 md:p-8">
+        
+        <!-- Header -->
+        <div class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900 tracking-tight">Disk Scheduling Solver</h1>
+                <p class="text-gray-500 mt-1">Visualize OS disk head scheduling algorithms</p>
+            </div>
+            <div class="flex gap-2">
+                <button id="btn-animate" class="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700 shadow-sm">
+                    <i data-lucide="play" class="w-4 h-4"></i>
+                    <span id="btn-animate-text">Animate Graph</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Controls Sidebar -->
+            <div class="lg:col-span-4 space-y-6">
+                
+                <!-- Input Card -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-center gap-2 mb-4 text-gray-900 font-semibold">
+                        <i data-lucide="settings" class="text-gray-400 w-5 h-5"></i>
+                        <span>Configuration</span>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Request Queue (Cylinders)</label>
+                            <textarea id="input-requests" class="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm font-mono h-24 resize-none transition-all" placeholder="e.g. 98, 183, 37...">98, 183, 37, 122, 14, 124, 65, 67</textarea>
+                            <p class="text-xs text-gray-400 mt-1" id="label-disk-range">Comma separated values (0 - 199)</p>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Head Start</label>
+                                <input type="number" id="input-head" value="53" class="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Disk Size</label>
+                                <input type="number" id="input-size" value="200" class="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Direction (Initial)</label>
+                            <div class="flex bg-gray-100 p-1 rounded-lg">
+                                <button id="btn-dir-left" class="flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all text-gray-500 hover:text-gray-700">
+                                    <i data-lucide="chevron-left" class="w-4 h-4"></i> Low (Left)
+                                </button>
+                                <button id="btn-dir-right" class="flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all bg-white text-blue-600 shadow-sm">
+                                    High (Right) <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Algorithm Selection -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-3">Algorithm</label>
+                    <div class="space-y-2" id="algo-list">
+                        <!-- Algo buttons injected by JS -->
+                    </div>
+                </div>
+
+                <!-- Stats Card -->
+                <div class="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl shadow-lg p-6 text-white">
+                    <h3 class="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">Performance Metrics</h3>
+                    <div class="flex items-end justify-between mb-2">
+                        <div>
+                            <span id="stat-seek-count" class="text-4xl font-bold tracking-tight">0</span>
+                            <span class="text-gray-400 ml-2 text-sm">cylinders</span>
+                        </div>
+                        <div class="bg-white/10 p-2 rounded-lg">
+                            <i data-lucide="arrow-up" class="text-green-400 w-5 h-5"></i>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-400">Total Head Movement</p>
+                    
+                    <div class="mt-6 pt-6 border-t border-white/10">
+                        <div class="text-xs text-gray-400 mb-2">Seek Sequence</div>
+                        <div id="stat-sequence" class="flex flex-wrap gap-1">
+                            <!-- Sequence tags injected by JS -->
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Visualization Main Area -->
+            <div class="lg:col-span-8">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 overflow-hidden">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="font-semibold text-gray-800">Seek Graph</h3>
+                        <div class="text-sm text-gray-500 flex items-center gap-2">
+                            <span class="w-3 h-3 rounded-full bg-blue-500"></span> Request
+                            <span class="w-3 h-3 rounded-full bg-green-500 ml-2"></span> Start
+                        </div>
+                    </div>
+
+                    <div class="w-full overflow-x-auto">
+                        <div id="graph-container" class="min-w-[600px]">
+                            <!-- SVG injected by JS -->
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 p-4 bg-blue-50 rounded-lg text-sm text-blue-800 flex items-start gap-3">
+                        <i data-lucide="info" class="mt-0.5 flex-shrink-0 w-5 h-5"></i>
+                        <div id="algo-description">
+                            <!-- Description injected by JS -->
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+    <script>
+        // --- State ---
+        const state = {
+            requestsInput: '98, 183, 37, 122, 14, 124, 65, 67',
+            headStart: 53,
+            diskSize: 200,
+            direction: 'right', // 'left' or 'right'
+            selectedAlgo: 'FCFS',
+            animating: false,
+            animationStep: -1,
+            timer: null
+        };
+
+        const ALGORITHMS = [
+            { id: 'FCFS', name: 'FCFS', desc: 'First-Come, First-Served' },
+            { id: 'SSTF', name: 'SSTF', desc: 'Shortest Seek Time First' },
+            { id: 'SCAN', name: 'SCAN', desc: 'Elevator Algorithm' },
+            { id: 'CSCAN', name: 'C-SCAN', desc: 'Circular SCAN' },
+            { id: 'LOOK', name: 'LOOK', desc: 'Adaptive SCAN' },
+            { id: 'CLOOK', name: 'C-LOOK', desc: 'Circular LOOK' },
+        ];
+
+        // --- Logic ---
+
+        function parseRequests(input) {
+            return input.split(',')
+                .map(s => parseInt(s.trim()))
+                .filter(n => !isNaN(n) && n >= 0 && n < state.diskSize);
+        }
+
+        function calculateSchedule() {
+            const rawRequests = parseRequests(state.requestsInput);
+            let sequence = [state.headStart];
+            
+            // Logic clones
+            switch (state.selectedAlgo) {
+                case 'FCFS':
+                    sequence = [state.headStart, ...rawRequests];
+                    break;
+
+                case 'SSTF': {
+                    let currentHead = state.headStart;
+                    let pending = [...rawRequests];
+                    sequence = [state.headStart];
+                    
+                    while (pending.length > 0) {
+                        let closestIndex = -1;
+                        let minDistance = Infinity;
+                        
+                        for (let i = 0; i < pending.length; i++) {
+                            const dist = Math.abs(pending[i] - currentHead);
+                            if (dist < minDistance) {
+                                minDistance = dist;
+                                closestIndex = i;
+                            }
+                        }
+                        
+                        currentHead = pending[closestIndex];
+                        sequence.push(currentHead);
+                        pending.splice(closestIndex, 1);
+                    }
+                    break;
+                }
+
+                case 'SCAN': {
+                    let left = rawRequests.filter(r => r < state.headStart).sort((a, b) => b - a);
+                    let right = rawRequests.filter(r => r > state.headStart).sort((a, b) => a - b);
+                    
+                    if (state.direction === 'right') {
+                        const goRight = [...right];
+                        if (goRight.length > 0 || (left.length > 0)) goRight.push(state.diskSize - 1);
+                        sequence = [state.headStart, ...goRight, ...left];
+                    } else {
+                        const goLeft = [...left];
+                        if (goLeft.length > 0 || (right.length > 0)) goLeft.push(0);
+                        sequence = [state.headStart, ...goLeft, ...right];
+                    }
+                    // Filter consecutive duplicates
+                    sequence = sequence.filter((val, idx) => idx === 0 || val !== sequence[idx-1]);
+                    break;
+                }
+
+                case 'CSCAN': {
+                    let left = rawRequests.filter(r => r < state.headStart).sort((a, b) => a - b);
+                    let right = rawRequests.filter(r => r > state.headStart).sort((a, b) => a - b);
+                    
+                    if (state.direction === 'right') {
+                        sequence = [state.headStart, ...right];
+                        if (sequence[sequence.length-1] !== state.diskSize - 1) sequence.push(state.diskSize - 1);
+                        sequence.push(0);
+                        sequence = [...sequence, ...left];
+                    } else {
+                        let leftDesc = rawRequests.filter(r => r < state.headStart).sort((a, b) => b - a);
+                        let rightDesc = rawRequests.filter(r => r > state.headStart).sort((a, b) => b - a);
+                        
+                        sequence = [state.headStart, ...leftDesc];
+                        if (sequence[sequence.length-1] !== 0) sequence.push(0);
+                        sequence.push(state.diskSize - 1);
+                        sequence = [...sequence, ...rightDesc];
+                    }
+                    break;
+                }
+
+                case 'LOOK': {
+                    let left = rawRequests.filter(r => r < state.headStart).sort((a, b) => b - a);
+                    let right = rawRequests.filter(r => r > state.headStart).sort((a, b) => a - b);
+                    if (state.direction === 'right') {
+                        sequence = [state.headStart, ...right, ...left];
+                    } else {
+                        sequence = [state.headStart, ...left, ...right];
+                    }
+                    break;
+                }
+
+                case 'CLOOK': {
+                    let left = rawRequests.filter(r => r < state.headStart).sort((a, b) => a - b);
+                    let right = rawRequests.filter(r => r > state.headStart).sort((a, b) => a - b);
+                    if (state.direction === 'right') {
+                        sequence = [state.headStart, ...right, ...left];
+                    } else {
+                        let leftDesc = rawRequests.filter(r => r < state.headStart).sort((a, b) => b - a);
+                        let rightDesc = rawRequests.filter(r => r > state.headStart).sort((a, b) => b - a);
+                        sequence = [state.headStart, ...leftDesc, ...rightDesc];
+                    }
+                    break;
+                }
+            }
+
+            let seekCount = 0;
+            for (let i = 0; i < sequence.length - 1; i++) {
+                seekCount += Math.abs(sequence[i] - sequence[i+1]);
+            }
+
+            return { sequence, seekCount };
+        }
+
+        // --- UI Rendering ---
+
+        function renderAlgoButtons() {
+            const container = document.getElementById('algo-list');
+            container.innerHTML = ALGORITHMS.map(algo => {
+                const isActive = state.selectedAlgo === algo.id;
+                const activeClass = isActive ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-500' : 'bg-white border-gray-100 hover:bg-gray-50';
+                const textClass = isActive ? 'text-blue-700' : 'text-gray-700';
+                const dot = isActive ? '<div class="h-2 w-2 rounded-full bg-blue-500"></div>' : '';
+
+                return `
+                    <button
+                        onclick="setAlgo('${algo.id}')"
+                        class="w-full flex items-center justify-between p-3 rounded-lg text-left border transition-all ${activeClass}"
+                    >
+                        <div>
+                            <span class="block font-semibold ${textClass}">${algo.name}</span>
+                            <span class="text-xs text-gray-500">${algo.desc}</span>
+                        </div>
+                        ${dot}
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function renderStats(result) {
+            document.getElementById('stat-seek-count').textContent = result.seekCount;
+            
+            const seqContainer = document.getElementById('stat-sequence');
+            seqContainer.innerHTML = result.sequence.map((cyl, i) => `
+                <span class="inline-flex items-center text-xs font-mono bg-black/30 px-1.5 py-0.5 rounded text-gray-300">
+                    ${cyl}
+                    ${i < result.sequence.length - 1 ? '<span class="ml-1 opacity-30">→</span>' : ''}
+                </span>
+            `).join('');
+
+            const algoObj = ALGORITHMS.find(a => a.id === state.selectedAlgo);
+            const descContainer = document.getElementById('algo-description');
+            
+            let descText = '';
+            if (state.selectedAlgo === 'FCFS') descText = 'Requests are addressed in the order they arrive in the disk queue.';
+            else if (state.selectedAlgo === 'SSTF') descText = 'Selects the request with the minimum seek time from the current head position.';
+            else if (state.selectedAlgo === 'SCAN') descText = 'The disk arm starts at one end, moves toward the other, servicing requests until it hits the boundary, then reverses.';
+            else if (state.selectedAlgo === 'CSCAN') descText = 'Moves in one direction servicing requests. When it hits the end, it jumps to the beginning without servicing requests on the return.';
+            else if (state.selectedAlgo === 'LOOK') descText = 'Similar to SCAN, but only goes as far as the last request in each direction before reversing.';
+            else if (state.selectedAlgo === 'CLOOK') descText = 'Similar to C-SCAN, but jumps from the last request to the first request without hitting the disk boundary.';
+            
+            descContainer.innerHTML = `<p class="font-semibold mb-1">How ${algoObj.name} works:</p><p>${descText}</p>`;
+        }
+
+        function renderGraph(result) {
+            const container = document.getElementById('graph-container');
+            const svgWidth = 800;
+            const svgHeight = Math.max(400, result.sequence.length * 40);
+            container.style.height = `${svgHeight}px`;
+
+            const padding = { top: 40, right: 40, bottom: 40, left: 60 };
+            const graphWidth = svgWidth - padding.left - padding.right;
+            const graphHeight = svgHeight - padding.top - padding.bottom;
+
+            const getX = (val) => padding.left + (val / (state.diskSize - 1)) * graphWidth;
+            const getY = (idx) => padding.top + (idx * (graphHeight / Math.max(1, result.sequence.length - 1)));
+
+            // Determine what to show based on animation state
+            let visibleSequence = result.sequence;
+            if (state.animating && state.animationStep >= 0) {
+                visibleSequence = result.sequence.slice(0, state.animationStep + 1);
+            }
+
+            const pathPoints = visibleSequence.map((val, i) => `${getX(val)},${getY(i)}`).join(' ');
+
+            // Ticks
+            const ticks = [0, Math.floor(state.diskSize/4), Math.floor(state.diskSize/2), Math.floor(3*state.diskSize/4), state.diskSize - 1];
+            const ticksSvg = ticks.map(tick => `
+                <g transform="translate(${getX(tick)}, ${padding.top - 10})">
+                    <text text-anchor="middle" fill="#9ca3af" font-size="12">${tick}</text>
+                    <line y1="10" y2="${svgHeight - padding.bottom - padding.top + 10}" stroke="#f3f4f6" stroke-dasharray="4 4" />
+                </g>
+            `).join('');
+
+            // Points
+            const pointsSvg = visibleSequence.map((val, i) => `
+                <g transform="translate(${getX(val)}, ${getY(i)})" class="group cursor-pointer">
+                    <circle 
+                        r="${i === 0 ? 6 : 4}" 
+                        fill="${i === 0 ? "#22c55e" : "#3b82f6"}" 
+                        stroke="white" 
+                        stroke-width="2"
+                        class="transition-all duration-300 group-hover:r-6"
+                    />
+                    <text x="12" y="4" fill="#4b5563" class="opacity-0 group-hover:opacity-100 font-bold bg-white" style="font-size:12px">${val}</text>
+                    <text x="-15" y="4" text-anchor="end" fill="#9ca3af" font-size="10">${i + 1}</text>
+                    <line x1="${-padding.left}" y1="0" x2="0" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="2 2" />
+                </g>
+            `).join('');
+
+            const svgContent = `
+                <svg width="100%" height="100%" viewBox="0 0 ${svgWidth} ${svgHeight}" class="font-mono text-xs">
+                    <line x1="${padding.left}" y1="${padding.top}" x2="${svgWidth - padding.right}" y2="${padding.top}" stroke="#e5e7eb" stroke-width="2" />
+                    <line x1="${padding.left}" y1="${svgHeight - padding.bottom}" x2="${svgWidth - padding.right}" y2="${svgHeight - padding.bottom}" stroke="#e5e7eb" stroke-width="2" />
+                    ${ticksSvg}
+                    <path 
+                        d="M ${pathPoints}" 
+                        fill="none" 
+                        stroke="#3b82f6" 
+                        stroke-width="2.5" 
+                        stroke-linejoin="round"
+                        stroke-linecap="round"
+                        class="drop-shadow-sm"
+                    />
+                    ${pointsSvg}
+                </svg>
+            `;
+
+            container.innerHTML = svgContent;
+        }
+
+        function updateControls() {
+            // Update inputs
+            // (Usually we don't force update inputs from state unless needed to prevent cursor jumps, 
+            // but for simple sync we can do it if state changed externally)
+            
+            // Direction Buttons
+            const btnLeft = document.getElementById('btn-dir-left');
+            const btnRight = document.getElementById('btn-dir-right');
+            
+            if (state.direction === 'left') {
+                btnLeft.className = "flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all bg-white text-blue-600 shadow-sm";
+                btnRight.className = "flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all text-gray-500 hover:text-gray-700";
+            } else {
+                btnRight.className = "flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all bg-white text-blue-600 shadow-sm";
+                btnLeft.className = "flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all text-gray-500 hover:text-gray-700";
+            }
+
+            // Animate Button state
+            const btnAnimate = document.getElementById('btn-animate');
+            const btnAnimateText = document.getElementById('btn-animate-text');
+            if (state.animating) {
+                btnAnimate.classList.add('bg-blue-100', 'text-blue-400', 'cursor-not-allowed');
+                btnAnimate.classList.remove('bg-blue-600', 'text-white', 'hover:bg-blue-700');
+                btnAnimateText.textContent = "Playing...";
+                btnAnimate.disabled = true;
+            } else {
+                btnAnimate.classList.remove('bg-blue-100', 'text-blue-400', 'cursor-not-allowed');
+                btnAnimate.classList.add('bg-blue-600', 'text-white', 'hover:bg-blue-700');
+                btnAnimateText.textContent = "Animate Graph";
+                btnAnimate.disabled = false;
+            }
+
+            document.getElementById('label-disk-range').textContent = `Comma separated values (0 - ${state.diskSize - 1})`;
+            
+            // Re-render Lucide icons
+            lucide.createIcons();
+        }
+
+        function update() {
+            const result = calculateSchedule();
+            renderAlgoButtons();
+            renderStats(result);
+            renderGraph(result);
+            updateControls();
+        }
+
+        // --- Interaction ---
+
+        function setAlgo(id) {
+            state.selectedAlgo = id;
+            stopAnimation();
+            update();
+        }
+
+        function setDirection(dir) {
+            state.direction = dir;
+            update();
+        }
+
+        function stopAnimation() {
+            state.animating = false;
+            state.animationStep = -1;
+            if (state.timer) clearTimeout(state.timer);
+            state.timer = null;
+        }
+
+        function startAnimation() {
+            if (state.animating) return;
+            const result = calculateSchedule();
+            state.animating = true;
+            state.animationStep = 0;
+            update();
+
+            function loop() {
+                if (!state.animating) return;
+                
+                if (state.animationStep < result.sequence.length - 1) {
+                    state.timer = setTimeout(() => {
+                        state.animationStep++;
+                        update();
+                        loop();
+                    }, 600);
+                } else {
+                    state.animating = false;
+                    update();
+                }
+            }
+            loop();
+        }
+
+        // Event Listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            // Inputs
+            document.getElementById('input-requests').addEventListener('input', (e) => {
+                state.requestsInput = e.target.value;
+                stopAnimation();
+                update();
+            });
+
+            document.getElementById('input-head').addEventListener('input', (e) => {
+                state.headStart = parseInt(e.target.value) || 0;
+                stopAnimation();
+                update();
+            });
+
+            document.getElementById('input-size').addEventListener('input', (e) => {
+                state.diskSize = parseInt(e.target.value) || 200;
+                stopAnimation();
+                update();
+            });
+
+            // Buttons
+            document.getElementById('btn-dir-left').addEventListener('click', () => setDirection('left'));
+            document.getElementById('btn-dir-right').addEventListener('click', () => setDirection('right'));
+            document.getElementById('btn-animate').addEventListener('click', startAnimation);
+
+            // Initial Render
+            update();
+        });
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Page Replacement Solver</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Custom scrollbar for horizontal table scrolling */
+        ::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-50 text-gray-800 font-sans selection:bg-indigo-100">
+
+    <div class="max-w-7xl mx-auto p-4 md:p-8">
+        
+        <!-- Header -->
+        <div class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900 tracking-tight">Page Replacement Solver</h1>
+                <p class="text-gray-500 mt-1">Visualize memory management algorithms (FIFO, LRU, Optimal)</p>
+            </div>
+            <div class="flex gap-2">
+                <div class="flex items-center gap-2 text-sm text-gray-600 bg-white px-3 py-1.5 rounded-full border border-gray-200 shadow-sm">
+                    <span class="w-3 h-3 rounded-full bg-red-100 border border-red-300"></span> Miss (Fault)
+                    <span class="w-3 h-3 rounded-full bg-green-100 border border-green-300 ml-2"></span> Hit
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Controls Sidebar -->
+            <div class="lg:col-span-3 space-y-6">
+                
+                <!-- Input Card -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-center gap-2 mb-4 text-gray-900 font-semibold">
+                        <i data-lucide="settings" class="text-gray-400 w-5 h-5"></i>
+                        <span>Configuration</span>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Reference String</label>
+                            <textarea id="input-pages" class="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm font-mono h-24 resize-none transition-all" placeholder="e.g. 7, 0, 1, 2, 0, 3, 0...">7, 0, 1, 2, 0, 3, 0, 4, 2, 3, 0, 3, 2, 1, 2, 0, 1, 7, 0, 1</textarea>
+                            <p class="text-xs text-gray-400 mt-1">Comma or space separated page numbers</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Frame Capacity</label>
+                            <div class="flex items-center gap-2">
+                                <button onclick="adjustFrames(-1)" class="p-2 hover:bg-gray-100 rounded-lg border border-gray-200 text-gray-600 transition-colors">
+                                    <i data-lucide="minus" class="w-4 h-4"></i>
+                                </button>
+                                <input type="number" id="input-frames" value="3" min="1" max="10" class="w-full text-center p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold text-lg" readonly>
+                                <button onclick="adjustFrames(1)" class="p-2 hover:bg-gray-100 rounded-lg border border-gray-200 text-gray-600 transition-colors">
+                                    <i data-lucide="plus" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Algorithm Selection -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-3">Algorithm</label>
+                    <div class="space-y-2" id="algo-list">
+                        <!-- Algo buttons injected by JS -->
+                    </div>
+                </div>
+
+                <!-- Stats Summary -->
+                <div class="bg-indigo-900 rounded-xl shadow-lg p-6 text-white">
+                    <h3 class="text-xs font-semibold text-indigo-200 uppercase tracking-wider mb-4">Results</h3>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div class="bg-white/10 p-3 rounded-lg text-center">
+                            <div id="stat-faults" class="text-2xl font-bold text-red-300">0</div>
+                            <div class="text-xs text-indigo-200">Page Faults</div>
+                        </div>
+                        <div class="bg-white/10 p-3 rounded-lg text-center">
+                            <div id="stat-hits" class="text-2xl font-bold text-green-300">0</div>
+                            <div class="text-xs text-indigo-200">Page Hits</div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between items-center text-sm pt-4 border-t border-indigo-800">
+                        <span class="text-indigo-300">Hit Ratio</span>
+                        <span id="stat-ratio" class="font-mono font-bold">0%</span>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Visualization Main Area -->
+            <div class="lg:col-span-9">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-full overflow-hidden">
+                    <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                        <h3 class="font-semibold text-gray-800 flex items-center gap-2">
+                            <i data-lucide="layout-grid" class="w-4 h-4 text-indigo-500"></i>
+                            Allocation Table
+                        </h3>
+                        <div id="algo-title" class="text-xs font-bold px-2 py-1 bg-indigo-100 text-indigo-700 rounded uppercase tracking-wide">
+                            FIFO
+                        </div>
+                    </div>
+
+                    <div class="flex-1 overflow-auto p-4 bg-gray-50/30" id="table-container">
+                        <!-- Table injected here -->
+                    </div>
+                    
+                    <div class="p-4 bg-white border-t border-gray-100 text-sm text-gray-600">
+                        <div id="algo-description" class="flex gap-3">
+                            <!-- Description injected here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+    <script>
+        // --- State ---
+        const state = {
+            inputStr: '7, 0, 1, 2, 0, 3, 0, 4, 2, 3, 0, 3, 2, 1, 2, 0, 1, 7, 0, 1',
+            frames: 3,
+            selectedAlgo: 'FIFO'
+        };
+
+        const ALGORITHMS = [
+            { id: 'FIFO', name: 'FIFO', desc: 'First-In, First-Out. The oldest page in memory is replaced first.' },
+            { id: 'LRU', name: 'LRU', desc: 'Least Recently Used. Replaces the page that has not been used for the longest period of time.' },
+            { id: 'OPTIMAL', name: 'OPTIMAL', desc: 'Optimal. Replaces the page that will not be used for the longest period of time in the future.' },
+        ];
+
+        // --- Core Logic ---
+
+        function parseInput(str) {
+            // Split by comma or space, filter empties, parse to int
+            return str.split(/[\s,]+/)
+                .map(s => s.trim())
+                .filter(s => s !== '')
+                .map(s => parseInt(s))
+                .filter(n => !isNaN(n));
+        }
+
+        // Returns an array of step objects:
+        // { page: number, frames: [], isHit: bool, faultCount: number }
+        function runFIFO(pages, capacity) {
+            let frames = Array(capacity).fill(null);
+            let steps = [];
+            let queue = []; // To track order of insertion
+            let faults = 0;
+
+            pages.forEach(page => {
+                let isHit = frames.includes(page);
+                
+                if (!isHit) {
+                    faults++;
+                    if (queue.length < capacity) {
+                        // Still have space
+                        let emptyIdx = frames.indexOf(null);
+                        frames[emptyIdx] = page;
+                        queue.push(page);
+                    } else {
+                        // Replace oldest
+                        let toRemove = queue.shift();
+                        let idx = frames.indexOf(toRemove);
+                        frames[idx] = page;
+                        queue.push(page);
+                    }
+                }
+                
+                steps.push({
+                    page: page,
+                    frames: [...frames],
+                    isHit: isHit,
+                    totalFaults: faults
+                });
+            });
+            return steps;
+        }
+
+        function runLRU(pages, capacity) {
+            let frames = Array(capacity).fill(null);
+            let steps = [];
+            let lastUsed = new Map(); // page -> timestamp (index)
+            let faults = 0;
+
+            pages.forEach((page, timeIdx) => {
+                let isHit = frames.includes(page);
+                
+                // Update usage time
+                lastUsed.set(page, timeIdx);
+
+                if (!isHit) {
+                    faults++;
+                    if (frames.includes(null)) {
+                        let emptyIdx = frames.indexOf(null);
+                        frames[emptyIdx] = page;
+                    } else {
+                        // Find LRU
+                        let lruPage = -1;
+                        let minTime = Infinity;
+                        
+                        frames.forEach(p => {
+                            let t = lastUsed.get(p);
+                            if (t < minTime) {
+                                minTime = t;
+                                lruPage = p;
+                            }
+                        });
+
+                        let idx = frames.indexOf(lruPage);
+                        frames[idx] = page;
+                    }
+                }
+
+                steps.push({
+                    page: page,
+                    frames: [...frames],
+                    isHit: isHit,
+                    totalFaults: faults
+                });
+            });
+            return steps;
+        }
+
+        function runOptimal(pages, capacity) {
+            let frames = Array(capacity).fill(null);
+            let steps = [];
+            let faults = 0;
+
+            pages.forEach((page, currentIdx) => {
+                let isHit = frames.includes(page);
+
+                if (!isHit) {
+                    faults++;
+                    if (frames.includes(null)) {
+                        let emptyIdx = frames.indexOf(null);
+                        frames[emptyIdx] = page;
+                    } else {
+                        // Find Optimal to remove: one that appears farthest in future
+                        let victimIdx = -1;
+                        let maxDistance = -1;
+
+                        frames.forEach((fPage, fIdx) => {
+                            // Find next occurrence
+                            let nextUse = -1;
+                            for (let i = currentIdx + 1; i < pages.length; i++) {
+                                if (pages[i] === fPage) {
+                                    nextUse = i;
+                                    break;
+                                }
+                            }
+
+                            if (nextUse === -1) {
+                                // Never used again, instant candidate (distance infinity)
+                                maxDistance = Infinity;
+                                victimIdx = fIdx;
+                            } else {
+                                if (nextUse > maxDistance) {
+                                    maxDistance = nextUse;
+                                    victimIdx = fIdx;
+                                }
+                            }
+                        });
+
+                        // If multiple were infinity (never used again), we usually pick FIFO among them or just the first one found.
+                        // The above logic updates victimIdx naturally.
+                        
+                        frames[victimIdx] = page;
+                    }
+                }
+
+                steps.push({
+                    page: page,
+                    frames: [...frames],
+                    isHit: isHit,
+                    totalFaults: faults
+                });
+            });
+            return steps;
+        }
+
+        // --- Rendering ---
+
+        function renderAlgoList() {
+            const container = document.getElementById('algo-list');
+            container.innerHTML = ALGORITHMS.map(algo => {
+                const isActive = state.selectedAlgo === algo.id;
+                const activeClass = isActive 
+                    ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-500 text-indigo-700' 
+                    : 'bg-white border-gray-100 hover:bg-gray-50 text-gray-700';
+
+                return `
+                    <button
+                        onclick="setAlgo('${algo.id}')"
+                        class="w-full flex items-center justify-between p-3 rounded-lg text-left border transition-all ${activeClass}"
+                    >
+                        <span class="font-semibold">${algo.name}</span>
+                        ${isActive ? '<i data-lucide="check" class="w-4 h-4 text-indigo-500"></i>' : ''}
+                    </button>
+                `;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        function renderTable(steps) {
+            const container = document.getElementById('table-container');
+            if (steps.length === 0) {
+                container.innerHTML = '<div class="text-center text-gray-400 py-10">No valid input data</div>';
+                return;
+            }
+
+            // Create Grid
+            // Columns: Time steps
+            // Rows: Frame 1, Frame 2, ... Frame N, Status
+            
+            let html = '<div class="inline-block min-w-full align-middle">';
+            html += '<table class="min-w-full border-collapse text-sm">';
+            
+            // Header Row: Input Pages
+            html += '<tr><td class="p-2 font-bold text-gray-400 sticky left-0 bg-gray-50/95 border-b border-gray-200 z-10 w-24">Time</td>';
+            steps.forEach((step, i) => {
+                html += `<td class="p-2 text-center font-mono font-bold border-b border-gray-200 bg-gray-100/50 min-w-[3rem] text-gray-600">${i + 1}</td>`;
+            });
+            html += '</tr>';
+
+            // Reference String Row
+            html += '<tr><td class="p-2 font-bold text-gray-800 sticky left-0 bg-white border-b border-gray-200 z-10 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.1)]">Request</td>';
+            steps.forEach(step => {
+                html += `<td class="p-2 text-center font-mono text-lg font-bold border-b border-gray-200 bg-white">${step.page}</td>`;
+            });
+            html += '</tr>';
+
+            // Frame Rows
+            for (let f = 0; f < state.frames; f++) {
+                html += `<tr><td class="p-2 font-medium text-gray-500 sticky left-0 bg-white border-b border-gray-100 z-10 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.1)]">Frame ${f+1}</td>`;
+                steps.forEach((step, stepIdx) => {
+                    const val = step.frames[f];
+                    const prevStep = steps[stepIdx - 1];
+                    const prevVal = prevStep ? prevStep.frames[f] : null;
+                    
+                    // Animation/Highlight Logic
+                    // If this specific frame changed to the new page, highlight it
+                    const isNew = val !== null && (stepIdx === 0 || val !== prevVal);
+                    // If it's the specific page requested and it caused a change (Fault) or it was already there (Hit)
+                    
+                    let cellClass = "text-gray-400";
+                    let cellContent = val === null ? '-' : val;
+                    
+                    if (val !== null) {
+                        cellClass = "text-gray-800 font-medium";
+                        // If this specific cell is the one requested in this step
+                        if (val === step.page) {
+                             if (step.isHit) {
+                                 cellClass = "text-green-700 bg-green-50 font-bold border-green-200 border"; // Hit Highlight
+                             } else if (isNew) {
+                                 cellClass = "text-red-700 bg-red-50 font-bold border-red-200 border"; // Fault/Load Highlight
+                             }
+                        }
+                    }
+
+                    html += `<td class="p-2 text-center border-b border-gray-100 fade-in">
+                        <div class="w-8 h-8 mx-auto flex items-center justify-center rounded ${cellClass}">
+                            ${cellContent}
+                        </div>
+                    </td>`;
+                });
+                html += '</tr>';
+            }
+
+            // Status Row
+            html += '<tr><td class="p-2 font-bold text-gray-500 sticky left-0 bg-gray-50/95 border-t border-gray-200 z-10">Status</td>';
+            steps.forEach(step => {
+                const status = step.isHit ? 'HIT' : 'MISS';
+                const statusColor = step.isHit ? 'text-green-600 bg-green-100' : 'text-red-500 bg-red-100';
+                html += `<td class="p-2 text-center border-t border-gray-200">
+                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${statusColor}">${status}</span>
+                </td>`;
+            });
+            html += '</tr>';
+
+            html += '</table></div>';
+            container.innerHTML = html;
+        }
+
+        function update() {
+            const pages = parseInput(state.inputStr);
+            let result = [];
+
+            switch(state.selectedAlgo) {
+                case 'FIFO': result = runFIFO(pages, state.frames); break;
+                case 'LRU': result = runLRU(pages, state.frames); break;
+                case 'OPTIMAL': result = runOptimal(pages, state.frames); break;
+            }
+
+            // Update Stats
+            if (result.length > 0) {
+                const totalFaults = result[result.length - 1].totalFaults;
+                const totalHits = pages.length - totalFaults;
+                const ratio = ((totalHits / pages.length) * 100).toFixed(1);
+
+                document.getElementById('stat-faults').textContent = totalFaults;
+                document.getElementById('stat-hits').textContent = totalHits;
+                document.getElementById('stat-ratio').textContent = `${ratio}%`;
+            } else {
+                document.getElementById('stat-faults').textContent = '0';
+                document.getElementById('stat-hits').textContent = '0';
+                document.getElementById('stat-ratio').textContent = '0%';
+            }
+
+            document.getElementById('algo-title').textContent = state.selectedAlgo;
+            
+            const algoInfo = ALGORITHMS.find(a => a.id === state.selectedAlgo);
+            document.getElementById('algo-description').innerHTML = `
+                <i data-lucide="info" class="w-5 h-5 text-indigo-500 flex-shrink-0"></i>
+                <div>
+                    <span class="font-bold text-gray-800">${algoInfo.name}:</span>
+                    ${algoInfo.desc}
+                </div>
+            `;
+            lucide.createIcons();
+
+            renderAlgoList();
+            renderTable(result);
+        }
+
+        // --- Interaction ---
+
+        function setAlgo(id) {
+            state.selectedAlgo = id;
+            update();
+        }
+
+        function adjustFrames(delta) {
+            let newVal = state.frames + delta;
+            if (newVal < 1) newVal = 1;
+            if (newVal > 10) newVal = 10;
+            state.frames = newVal;
+            document.getElementById('input-frames').value = newVal;
+            update();
+        }
+
+        // --- Initialization ---
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const inputPages = document.getElementById('input-pages');
+            
+            inputPages.addEventListener('input', (e) => {
+                state.inputStr = e.target.value;
+                update();
+            });
+
+            // Initial render
+            update();
+        });
+
+    </script>
+</body>
+</html>
